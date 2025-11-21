@@ -16,19 +16,17 @@ import java.util.concurrent.ConcurrentHashMap;
  * Nhận tín hiệu chuột, bàn phím và điều khiển máy tính đích
  */
 public class RemoteDesktopWebSocket implements WebSocketListener {
-    
+
     private Session session;
     private Robot robot;
-    private String clientId;
-    private String peerId; // ID của peer đang kết nối P2P
+    private final String clientId;
+    private String peerId;
     private static final ConcurrentHashMap<String, RemoteDesktopWebSocket> clients = new ConcurrentHashMap<>();
     private static int clientCounter = 0;
-    
+
     public RemoteDesktopWebSocket() {
-        // Tạo ID duy nhất cho client
         this.clientId = "client_" + (++clientCounter) + "_" + System.currentTimeMillis();
         try {
-            // Khởi tạo Robot để điều khiển chuột và bàn phím
             robot = new Robot();
             robot.setAutoDelay(10);
         } catch (AWTException e) {
@@ -53,19 +51,15 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
         this.session = session;
         clients.put(clientId, this);
         
-        System.out.println("Client kết nối: " + clientId);
-        System.out.println("Tổng số client: " + clients.size());
-        
-        // Gửi thông báo kết nối thành công kèm client ID
         JsonObject response = new JsonObject();
         response.addProperty("type", "connected");
         response.addProperty("message", "Kết nối thành công!");
         response.addProperty("clientId", clientId);
         response.addProperty("totalClients", clients.size());
         sendMessage(response.toString());
-        
-        // Gửi danh sách client khác (để chọn peer)
-        sendClientList();
+
+        autoPairWithAvailablePeer();
+        sendClientListToAll();
     }
     
     @Override
@@ -83,8 +77,7 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
         }
         
         clients.remove(clientId);
-        System.out.println("Client ngắt kết nối: " + clientId);
-        System.out.println("Tổng số client còn lại: " + clients.size());
+        sendClientListToAll();
     }
     
     @Override
@@ -96,11 +89,9 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
     @Override
     public void onWebSocketText(String message) {
         try {
-            // Parse JSON message từ client
             JsonObject json = JsonParser.parseString(message).getAsJsonObject();
             String type = json.get("type").getAsString();
             
-            // Xử lý các loại tín hiệu khác nhau
             switch (type) {
                 case "mouseMove":
                     handleMouseMove(json);
@@ -145,9 +136,6 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
         // Không sử dụng binary data trong project này
     }
     
-    /**
-     * Xử lý di chuyển chuột
-     */
     private void handleMouseMove(JsonObject json) {
         int x = json.get("x").getAsInt();
         int y = json.get("y").getAsInt();
@@ -157,9 +145,6 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
         }
     }
     
-    /**
-     * Xử lý click chuột
-     */
     private void handleMouseClick(JsonObject json) {
         String button = json.get("button").getAsString();
         boolean pressed = json.get("pressed").getAsBoolean();
@@ -182,9 +167,6 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
         }
     }
     
-    /**
-     * Xử lý scroll chuột
-     */
     private void handleMouseScroll(JsonObject json) {
         int delta = json.get("delta").getAsInt();
         
@@ -193,9 +175,6 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
         }
     }
     
-    /**
-     * Xử lý nhấn phím
-     */
     private void handleKeyPress(JsonObject json) {
         String key = json.get("key").getAsString();
         boolean pressed = json.get("pressed").getAsBoolean();
@@ -216,9 +195,6 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
         }
     }
     
-    /**
-     * Chuyển đổi tên phím sang KeyEvent code
-     */
     private int getKeyCode(String key) {
         // Chuyển đổi một số phím thường dùng
         switch (key.toLowerCase()) {
@@ -235,7 +211,6 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
             case "arrowleft": return KeyEvent.VK_LEFT;
             case "arrowright": return KeyEvent.VK_RIGHT;
             default:
-                // Nếu là ký tự đơn, chuyển đổi sang key code
                 if (key.length() == 1) {
                     char ch = key.toUpperCase().charAt(0);
                     return ch;
@@ -244,14 +219,8 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
         }
     }
     
-    /**
-     * Xử lý WebRTC signaling message - Routing P2P đúng cách
-     * Chuyển tiếp signal đến peer, không echo lại cho chính client
-     */
     private void handleWebRTCSignal(JsonObject json) {
         String signalData = json.get("data").getAsString();
-        
-        // Nếu có peer, gửi signal đến peer
         if (peerId != null) {
             RemoteDesktopWebSocket peer = clients.get(peerId);
             if (peer != null && peer.session != null && peer.session.isOpen()) {
@@ -260,9 +229,7 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
                 signal.addProperty("data", signalData);
                 signal.addProperty("from", clientId);
                 peer.sendMessage(signal.toString());
-                System.out.println("Đã chuyển tiếp WebRTC signal từ " + clientId + " đến " + peerId);
             } else {
-                // Peer đã ngắt kết nối
                 JsonObject error = new JsonObject();
                 error.addProperty("type", "error");
                 error.addProperty("message", "Peer không còn kết nối");
@@ -270,7 +237,6 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
                 peerId = null;
             }
         } else {
-            // Chưa có peer, thông báo lỗi
             JsonObject error = new JsonObject();
             error.addProperty("type", "error");
             error.addProperty("message", "Chưa kết nối với peer. Vui lòng chọn peer trước.");
@@ -278,13 +244,9 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
         }
     }
     
-    /**
-     * Xử lý kết nối với peer
-     */
     private void handleConnectPeer(JsonObject json) {
         String targetPeerId = json.get("peerId").getAsString();
         
-        // Kiểm tra peer có tồn tại không
         RemoteDesktopWebSocket targetPeer = clients.get(targetPeerId);
         if (targetPeer == null) {
             JsonObject error = new JsonObject();
@@ -294,7 +256,6 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
             return;
         }
         
-        // Kiểm tra peer có đang kết nối với client khác không
         if (targetPeer.getPeerId() != null && !targetPeer.getPeerId().equals(clientId)) {
             JsonObject error = new JsonObject();
             error.addProperty("type", "error");
@@ -303,29 +264,23 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
             return;
         }
         
-        // Thiết lập kết nối P2P
         this.peerId = targetPeerId;
         targetPeer.setPeerId(clientId);
-        
-        // Thông báo cho cả 2 client
+
         JsonObject success1 = new JsonObject();
         success1.addProperty("type", "peer-connected");
         success1.addProperty("peerId", targetPeerId);
         success1.addProperty("message", "Đã kết nối với peer: " + targetPeerId);
-        sendMessage(success1.toString());
+        this.sendMessage(success1.toString());
         
         JsonObject success2 = new JsonObject();
         success2.addProperty("type", "peer-connected");
         success2.addProperty("peerId", clientId);
         success2.addProperty("message", "Đã kết nối với peer: " + clientId);
         targetPeer.sendMessage(success2.toString());
-        
-        System.out.println("Đã ghép cặp: " + clientId + " <-> " + targetPeerId);
+        sendClientListToAll();
     }
     
-    /**
-     * Xử lý ngắt kết nối với peer
-     */
     private void handleDisconnectPeer() {
         if (peerId != null) {
             RemoteDesktopWebSocket peer = clients.get(peerId);
@@ -346,31 +301,62 @@ public class RemoteDesktopWebSocket implements WebSocketListener {
         }
     }
     
-    /**
-     * Gửi danh sách client (trừ chính nó)
-     */
+    private void autoPairWithAvailablePeer() {
+        for (RemoteDesktopWebSocket otherClient : clients.values()) {
+            if (!otherClient.clientId.equals(this.clientId) && otherClient.peerId == null && this.peerId == null) {
+                this.peerId = otherClient.clientId;
+                otherClient.peerId = this.clientId;
+                JsonObject msg1 = new JsonObject();
+                msg1.addProperty("type", "peer-connected");
+                msg1.addProperty("peerId", otherClient.clientId);
+                msg1.addProperty("message", "Đã kết nối với peer: " + otherClient.clientId);
+                this.sendMessage(msg1.toString());
+                
+                JsonObject msg2 = new JsonObject();
+                msg2.addProperty("type", "peer-connected");
+                msg2.addProperty("peerId", this.clientId);
+                msg2.addProperty("message", "Đã kết nối với peer: " + this.clientId);
+                otherClient.sendMessage(msg2.toString());
+                sendClientListToAll();
+                return;
+            }
+        }
+    }
+    
     private void sendClientList() {
         JsonObject response = new JsonObject();
         response.addProperty("type", "client-list");
-        
-        JsonObject clientsList = new JsonObject();
-        for (String id : clients.keySet()) {
-            if (!id.equals(clientId)) {
-                RemoteDesktopWebSocket client = clients.get(id);
-                JsonObject clientInfo = new JsonObject();
-                clientInfo.addProperty("id", id);
-                clientInfo.addProperty("hasPeer", client.getPeerId() != null);
-                clientsList.add(id, clientInfo);
-            }
-        }
-        response.add("clients", clientsList);
-        
+        response.add("clients", buildClientList(clientId));
         sendMessage(response.toString());
     }
     
-    /**
-     * Gửi message đến client
-     */
+    private void sendClientListToAll() {
+        for (RemoteDesktopWebSocket client : clients.values()) {
+            JsonObject response = new JsonObject();
+            response.addProperty("type", "client-list");
+            response.add("clients", buildClientList(client.clientId));
+            client.sendMessage(response.toString());
+        }
+    }
+
+    private JsonObject buildClientList(String excludeId) {
+        JsonObject clientsList = new JsonObject();
+        for (String id : clients.keySet()) {
+            if (!id.equals(excludeId)) {
+                RemoteDesktopWebSocket otherClient = clients.get(id);
+                JsonObject clientInfo = new JsonObject();
+                clientInfo.addProperty("id", id);
+                boolean hasPeer = otherClient.getPeerId() != null;
+                clientInfo.addProperty("hasPeer", hasPeer);
+                if (hasPeer) {
+                    clientInfo.addProperty("peerId", otherClient.getPeerId());
+                }
+                clientsList.add(id, clientInfo);
+            }
+        }
+        return clientsList;
+    }
+
     private void sendMessage(String message) {
         if (session != null && session.isOpen()) {
             try {

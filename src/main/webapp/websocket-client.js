@@ -38,6 +38,9 @@ class WebSocketClient {
                         console.log("Client ID: " + this.clientId);
                     } else if (message.type === "webrtc-signal") {
                         // Xử lý WebRTC signaling từ peer (P2P)
+                        console.log("📨 [WEBSOCKET] Nhận webrtc-signal từ server");
+                        console.log("📨 [WEBSOCKET] Signal data:", message.data);
+                        console.log("📨 [WEBSOCKET] From:", message.from);
                         handleWebRTCSignal(message.data);
                     } else if (message.type === "client-list") {
                         // Nhận danh sách client

@@ -32,6 +32,10 @@ async function startScreenShare() {
     }
     
     try {
+        console.log("[MAIN] Bắt đầu startScreenShare...");
+        console.log("[MAIN] WebSocket connected:", wsClient.isConnected);
+        console.log("[MAIN] Peer ID:", wsClient.peerId);
+        
         await rtcClient.startScreenShare();
         isScreenSharing = true;
         
@@ -41,8 +45,10 @@ async function startScreenShare() {
         // Thiết lập event listeners cho chuột và bàn phím
         setupInputHandlers();
         
+        console.log("[MAIN] ✅ startScreenShare hoàn tất");
     } catch (error) {
-        console.error("Lỗi:", error);
+        console.error("❌ [MAIN] Lỗi startScreenShare:", error);
+        console.error("❌ [MAIN] Error stack:", error.stack);
         alert("Lỗi: " + error.message);
     }
 }
