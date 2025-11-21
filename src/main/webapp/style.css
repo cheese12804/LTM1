@@ -1,0 +1,170 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 15px;
+    padding: 30px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 30px;
+    font-size: 2.5em;
+}
+
+.controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+button {
+    padding: 12px 24px;
+    font-size: 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: 600;
+}
+
+button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#startBtn, #connectBtn {
+    background: #4CAF50;
+    color: white;
+}
+
+#stopBtn, #disconnectBtn {
+    background: #f44336;
+    color: white;
+}
+
+.status {
+    text-align: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f5f5f5;
+    border-radius: 8px;
+}
+
+#statusText {
+    font-size: 18px;
+    color: #666;
+    font-weight: 500;
+}
+
+.video-container {
+    text-align: center;
+    margin-bottom: 30px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 10px;
+    padding: 20px;
+    position: relative;
+    min-height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.video-container #remoteVideo {
+    position: relative;
+    z-index: 10;
+}
+
+.video-placeholder {
+    color: white;
+    text-align: center;
+    padding: 40px;
+}
+
+.placeholder-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    opacity: 0.9;
+}
+
+.placeholder-text {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.placeholder-hint {
+    font-size: 16px;
+    opacity: 0.8;
+}
+
+#remoteVideo {
+    max-width: 100%;
+    max-height: 70vh;
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    cursor: crosshair;
+    background: #000;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    object-fit: contain;
+    position: relative;
+    z-index: 10;
+}
+
+#remoteVideo:not([srcObject]) {
+    display: none;
+}
+
+#remoteVideo.hidden {
+    display: none !important;
+}
+
+.info {
+    background: #e3f2fd;
+    padding: 20px;
+    border-radius: 8px;
+    border-left: 4px solid #2196F3;
+}
+
+.info h3 {
+    color: #1976D2;
+    margin-bottom: 10px;
+}
+
+.info ul {
+    list-style-position: inside;
+    color: #555;
+    line-height: 1.8;
+}
+
+.info li {
+    margin-bottom: 8px;
+}
+

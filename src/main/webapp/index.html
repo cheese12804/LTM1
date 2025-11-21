@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote Desktop - WebRTC & WebSocket</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🖥️ Remote Desktop Control</h1>
+        
+        <div class="controls">
+            <button id="startBtn" onclick="startScreenShare()">Bắt đầu Chia Sẻ Màn Hình</button>
+            <button id="stopBtn" onclick="stopScreenShare()" disabled>Dừng Chia Sẻ</button>
+            <button id="connectBtn" onclick="connectWebSocket()">Kết Nối WebSocket</button>
+            <button id="disconnectBtn" onclick="disconnectWebSocket()" disabled>Ngắt Kết Nối</button>
+        </div>
+        
+        <div class="status">
+            <p id="statusText">Chưa kết nối</p>
+        </div>
+        
+        <div class="video-container">
+            <div id="videoPlaceholder" class="video-placeholder">
+                <div class="placeholder-icon">📺</div>
+                <div class="placeholder-text">Chưa có video stream</div>
+                <div class="placeholder-hint">Nhấn "Bắt đầu Chia Sẻ Màn Hình" để bắt đầu</div>
+            </div>
+            <video id="remoteVideo" autoplay playsinline muted></video>
+            <canvas id="localCanvas" style="display: none;"></canvas>
+        </div>
+        
+        <div class="info">
+            <h3>Hướng dẫn:</h3>
+            <ul>
+                <li>1. Nhấn "Kết Nối WebSocket" để kết nối với server</li>
+                <li>2. Nhấn "Bắt đầu Chia Sẻ Màn Hình" để chia sẻ màn hình</li>
+                <li>3. Di chuyển chuột và nhấn phím trên video để điều khiển</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script src="webrtc-client.js"></script>
+    <script src="websocket-client.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
+
