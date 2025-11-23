@@ -12,9 +12,17 @@ class WebRTCClient {
         this.controlChannel = null;    // DataChannel cho chuột/phím
         this.isHost = false;          // Máy đang share màn hình
 
-        // Dùng LAN / Radmin VPN → KHÔNG dùng STUN/TURN
+        // Cấu hình ICE servers cho WebRTC
+        // - STUN: Cần cho kết nối khác mạng (Internet)
+        // - Để test LAN thuần: đổi thành iceServers: []
+        // - Để dùng TURN: thêm { urls: 'turn:...', username: '...', credential: '...' }
         this.configuration = {
-            iceServers: [],           // bỏ hết STUN, chỉ dùng host candidate (26.x.x.x)
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }, 
+                { urls: 'stun:stun2.l.google.com:19302' }, 
+                { urls: 'stun:stun.mozilla.org:3478' }
+            ],
             iceCandidatePoolSize: 0
         };
     }
@@ -62,14 +70,14 @@ class WebRTCClient {
                 }
                 
                 // Gửi xuống Java Robot qua HTTP local
-                fetch('/api/control', {
+                fetch('http://127.0.0.1:9003/api/control', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(msg)
                 }).catch(err => {
-                    console.error("Lỗi gọi /api/control:", err);
+                    console.error("Lỗi gọi agent:", err);
                 });
             };
             
@@ -353,18 +361,27 @@ class WebRTCClient {
         };
         
         // Log ICE candidates để kiểm tra P2P có hoạt động hay không
+        let candidateCount = { host: 0, srflx: 0, relay: 0 };
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
                 const candidateStr = event.candidate.candidate;
-                console.log("ICE candidate:", candidateStr);
+                console.log("📡 ICE candidate:", candidateStr);
                 
                 // Phân tích loại candidate
                 if (candidateStr.includes("typ srflx")) {
+                    candidateCount.srflx++;
                     console.log("✅ NAT hợp tác (server reflexive) - P2P direct có khả năng thành công");
+                    console.log("   → STUN server hoạt động, đã lấy được IP public");
                 } else if (candidateStr.includes("typ relay")) {
+                    candidateCount.relay++;
                     console.log("⚠️ Đang dùng TURN (relay) - không phải P2P thuần");
+                    console.log("   → Đang relay qua TURN server");
                 } else if (candidateStr.includes("typ host")) {
-                    console.log("ℹ️ Chỉ có host candidate (local)");
+                    candidateCount.host++;
+                    console.log("ℹ️ Host candidate (local IP)");
+                    if (candidateCount.host === 1) {
+                        console.log("   → Chỉ có local IP, có thể không kết nối được nếu khác mạng");
+                    }
                 }
                 
                 const candidateMessage = {
@@ -373,19 +390,31 @@ class WebRTCClient {
                 };
                 wsClient.sendWebRTCSignal(JSON.stringify(candidateMessage));
             } else {
-                console.log("ICE gathering finished");
+                console.log("✅ ICE gathering finished");
+                console.log("📊 Tổng kết candidates:");
+                console.log("   - Host (local):", candidateCount.host);
+                console.log("   - Server reflexive (STUN):", candidateCount.srflx);
+                console.log("   - Relay (TURN):", candidateCount.relay);
+                if (candidateCount.srflx === 0 && candidateCount.relay === 0) {
+                    console.warn("⚠️ Chỉ có host candidates - có thể không kết nối được nếu khác mạng!");
+                    console.warn("   → Kiểm tra STUN servers có hoạt động không");
+                    console.warn("   → Kiểm tra firewall có chặn UDP không");
+                }
+                candidateCount = { host: 0, srflx: 0, relay: 0 }; // Reset cho lần sau
             }
         };
         
         // Log trạng thái ICE (rất quan trọng)
         this.peerConnection.oniceconnectionstatechange = () => {
             const iceState = this.peerConnection.iceConnectionState;
-            console.log("ICE state:", iceState);
+            console.log("🔌 ICE connection state =", iceState);
             
             if (iceState === "checking") {
                 updateStatus("🔄 WebRTC: Đang kiểm tra kết nối...");
+                console.log("ℹ️ Đang thử kết nối P2P...");
             } else if (iceState === "connected") {
                 updateStatus("✅ WebRTC: Đã kết nối P2P");
+                console.log("✅ ICE connection thành công!");
                 if (this.remoteVideo && this.remoteVideo.srcObject) {
                     setTimeout(() => {
                         if (typeof this.tryPlayVideo === 'function') {
@@ -395,11 +424,24 @@ class WebRTCClient {
                 }
             } else if (iceState === "completed") {
                 updateStatus("✅ WebRTC: Kết nối hoàn tất");
+                console.log("✅ ICE connection completed");
             } else if (iceState === "failed") {
                 console.error("❌ ICE connection failed");
-                updateStatus("❌ ICE connection failed");
+                console.error("❌ Có thể do:");
+                console.error("   1. Firewall chặn UDP (WebRTC dùng UDP)");
+                console.error("   2. Router không hỗ trợ NAT traversal");
+                console.error("   3. Symmetric NAT (cần TURN server)");
+                console.error("   4. STUN servers không truy cập được");
+                console.error("💡 Giải pháp:");
+                console.error("   - Kiểm tra firewall Windows/antivirus");
+                console.error("   - Thử tắt firewall tạm thời để test");
+                console.error("   - Kiểm tra router có AP Isolation không");
+                console.error("   - Nếu cùng mạng LAN: thử iceServers: [] (không dùng STUN)");
+                console.error("   - Nếu khác mạng: cần TURN server");
+                updateStatus("❌ ICE connection failed - Xem Console (F12) để biết chi tiết");
             } else if (iceState === "disconnected") {
                 updateStatus("⚠️ WebRTC: Đã ngắt kết nối");
+                console.warn("⚠️ ICE connection disconnected");
             }
         };
         
@@ -423,6 +465,16 @@ class WebRTCClient {
                 message = JSON.parse(signal);
             } else {
                 message = signal;
+            }
+            
+            // Debug log
+            if (message.type === "ice-candidate") {
+                console.log("🔔 [HANDLE_SIGNAL] Type: ice-candidate");
+                console.log("🔔 [HANDLE_SIGNAL] Message structure:", {
+                    type: message.type,
+                    hasCandidate: !!message.candidate,
+                    candidateType: typeof message.candidate
+                });
             }
             
             if (message.type === "offer") {
@@ -531,24 +583,30 @@ class WebRTCClient {
                 
             } else if (message.type === "ice-candidate") {
                 if (!this.peerConnection) {
+                    console.warn("⚠️ Nhận ICE candidate nhưng chưa có peerConnection");
                     return;
                 }
                 
                 if (!message.candidate) {
+                    console.warn("⚠️ ICE candidate không có candidate field:", message);
                     return;
                 }
                 
                 try {
+                    console.log("📥 [HANDLE_SIGNAL] Nhận ICE candidate:", message.candidate);
                     const candidate = new RTCIceCandidate(message.candidate);
                     
                     if (this.peerConnection.remoteDescription) {
                         await this.peerConnection.addIceCandidate(candidate);
                         this.addedRemoteCandidatesCount++;
+                        console.log("✅ Đã add ICE candidate (có remoteDescription). Tổng: " + this.addedRemoteCandidatesCount);
                     } else {
                         this.pendingCandidates.push(candidate);
+                        console.log("⏳ Queue ICE candidate (chưa có remoteDescription). Queue size: " + this.pendingCandidates.length);
                     }
                 } catch (error) {
                     console.error("❌ Lỗi thêm ICE candidate:", error);
+                    console.error("   Candidate data:", message.candidate);
                 }
             }
             
@@ -580,5 +638,24 @@ class WebRTCClient {
 const rtcClient = new WebRTCClient();
 
 function handleWebRTCSignal(signalData) {
-    rtcClient.handleSignal(signalData);
+    // signalData có thể là string hoặc object
+    // Nếu là string, parse nó; nếu là object, dùng trực tiếp
+    let parsedData = signalData;
+    if (typeof signalData === 'string') {
+        try {
+            parsedData = JSON.parse(signalData);
+        } catch (e) {
+            console.error("❌ Lỗi parse signalData:", e);
+            console.error("   Raw data:", signalData);
+            return;
+        }
+    }
+    
+    console.log("🔔 [HANDLE_WEBRTC_SIGNAL] Parsed signal:", {
+        type: parsedData?.type,
+        hasCandidate: !!parsedData?.candidate,
+        hasSdp: !!parsedData?.sdp
+    });
+    
+    rtcClient.handleSignal(parsedData);
 }

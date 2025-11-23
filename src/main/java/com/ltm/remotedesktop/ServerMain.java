@@ -74,9 +74,34 @@ public class ServerMain {
             // Chờ server chạy
             server.join();
             
+        } catch (java.net.BindException e) {
+            // Port đã được sử dụng
+            System.err.println("========================================");
+            System.err.println("❌ LỖI: Port " + port + " đã được sử dụng!");
+            System.err.println("========================================");
+            System.err.println("");
+            System.err.println("Cách xử lý:");
+            System.err.println("");
+            System.err.println("1. Tìm và dừng process đang dùng port " + port + ":");
+            System.err.println("   Windows: netstat -ano | findstr :" + port);
+            System.err.println("            taskkill /PID <PID> /F");
+            System.err.println("");
+            System.err.println("   Linux/Mac: lsof -i :" + port);
+            System.err.println("              kill -9 <PID>");
+            System.err.println("");
+            System.err.println("2. Hoặc dùng port khác:");
+            System.err.println("   mvn exec:java -Dexec.args=\"" + (port + 1) + "\"");
+            System.err.println("   hoặc");
+            System.err.println("   java -jar target/remote-desktop-1.0-SNAPSHOT.jar " + (port + 1));
+            System.err.println("");
+            System.err.println("========================================");
+            System.exit(1);
         } catch (Exception e) {
-            System.err.println("Lỗi khởi động server: " + e.getMessage());
+            System.err.println("========================================");
+            System.err.println("❌ Lỗi khởi động server: " + e.getMessage());
+            System.err.println("========================================");
             e.printStackTrace();
+            System.exit(1);
         }
     }
     

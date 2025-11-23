@@ -7,6 +7,10 @@ let isScreenSharing = false;
 // Dùng DataChannel cho điều khiển (true để test local)
 let useDataChannel = true;
 
+// Throttle cho mouseMove để tránh gửi quá nhiều events
+let mouseMoveThrottle = null;
+const MOUSE_MOVE_THROTTLE_MS = 16; // ~60fps
+
 /**
  * Cập nhật trạng thái hiển thị
  */
@@ -138,6 +142,12 @@ function removeInputHandlers() {
     
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
+    
+    // Clear throttle
+    if (mouseMoveThrottle) {
+        clearTimeout(mouseMoveThrottle);
+        mouseMoveThrottle = null;
+    }
 }
 
 /**
@@ -152,19 +162,37 @@ function handleMouseMove(event) {
     
     // Kiểm tra video có kích thước hợp lệ không
     if (!video.videoWidth || !video.videoHeight) {
-        console.warn("Video chưa có kích thước, đợi...");
-        return;
+        return; // Không log để tránh spam
     }
     
+    // Kiểm tra chuột có trong video element không
     const rect = video.getBoundingClientRect();
+    const mouseX = event.clientX;
+    const mouseY = event.clientY;
+    
+    if (mouseX < rect.left || mouseX > rect.right || 
+        mouseY < rect.top || mouseY > rect.bottom) {
+        return; // Chuột ngoài video, không xử lý
+    }
+    
+    // Tính toán tọa độ trong video
     const scaleX = video.videoWidth / rect.width;
     const scaleY = video.videoHeight / rect.height;
     
-    const x = Math.round((event.clientX - rect.left) * scaleX);
-    const y = Math.round((event.clientY - rect.top) * scaleY);
+    const x = Math.round((mouseX - rect.left) * scaleX);
+    const y = Math.round((mouseY - rect.top) * scaleY);
     
-    // Chỉ gửi nếu tọa độ hợp lệ
-    if (x >= 0 && y >= 0 && x <= video.videoWidth && y <= video.videoHeight) {
+    // Validate tọa độ
+    if (x < 0 || y < 0 || x > video.videoWidth || y > video.videoHeight) {
+        return; // Tọa độ không hợp lệ
+    }
+    
+    // Throttle để tránh gửi quá nhiều events
+    if (mouseMoveThrottle) {
+        clearTimeout(mouseMoveThrottle);
+    }
+    
+    mouseMoveThrottle = setTimeout(() => {
         if (useDataChannel) {
             rtcClient.sendControlMessage({
                 type: "mouseMove",
@@ -174,7 +202,7 @@ function handleMouseMove(event) {
         } else {
             wsClient.sendMouseMove(x, y);
         }
-    }
+    }, MOUSE_MOVE_THROTTLE_MS);
 }
 
 /**
@@ -183,6 +211,22 @@ function handleMouseMove(event) {
 function handleMouseDown(event) {
     // Cho phép điều khiển nếu đang chia sẻ HOẶC đang nhận video
     if (!isScreenSharing && !window.isReceivingVideo) return;
+    
+    // Chỉ xử lý khi click trong video element
+    const video = document.getElementById('remoteVideo');
+    if (!video) return;
+    
+    const rect = video.getBoundingClientRect();
+    const mouseX = event.clientX;
+    const mouseY = event.clientY;
+    
+    // Kiểm tra click có trong video không
+    if (mouseX < rect.left || mouseX > rect.right || 
+        mouseY < rect.top || mouseY > rect.bottom) {
+        return;
+    }
+    
+    event.preventDefault(); // Ngăn chặn context menu và các hành vi mặc định
     
     const button = event.button === 0 ? 'left' : 
                    event.button === 2 ? 'right' : 'middle';
@@ -205,6 +249,8 @@ function handleMouseUp(event) {
     // Cho phép điều khiển nếu đang chia sẻ HOẶC đang nhận video
     if (!isScreenSharing && !window.isReceivingVideo) return;
     
+    event.preventDefault(); // Ngăn chặn các hành vi mặc định
+    
     const button = event.button === 0 ? 'left' : 
                    event.button === 2 ? 'right' : 'middle';
     
@@ -226,7 +272,23 @@ function handleMouseWheel(event) {
     // Cho phép điều khiển nếu đang chia sẻ HOẶC đang nhận video
     if (!isScreenSharing && !window.isReceivingVideo) return;
     
-    event.preventDefault();
+    // Chỉ xử lý khi scroll trong video element
+    const video = document.getElementById('remoteVideo');
+    if (!video) return;
+    
+    const rect = video.getBoundingClientRect();
+    const mouseX = event.clientX;
+    const mouseY = event.clientY;
+    
+    // Kiểm tra scroll có trong video không
+    if (mouseX < rect.left || mouseX > rect.right || 
+        mouseY < rect.top || mouseY > rect.bottom) {
+        return;
+    }
+    
+    event.preventDefault(); // Ngăn scroll trang
+    event.stopPropagation(); // Ngăn event bubble
+    
     const delta = event.deltaY > 0 ? 1 : -1;
     
     if (useDataChannel) {
@@ -253,7 +315,17 @@ function handleKeyDown(event) {
         event.preventDefault();
     }
     
-    const key = event.key.length === 1 ? event.key : event.key.toLowerCase();
+    // Xử lý key: nếu event.key là "unidentified" hoặc rỗng, dùng event.code
+    let key = event.key;
+    if (!key || key === 'Unidentified' || key === 'unidentified') {
+        // Dùng event.code thay thế (ví dụ: "Backspace", "Enter", "KeyA", "Digit1")
+        key = event.code || '';
+        // Loại bỏ prefix "Key", "Digit", "Numpad" nếu có
+        key = key.replace(/^(Key|Digit|Numpad)/i, '');
+    } else {
+        // Bình thường: ký tự đơn giữ nguyên, còn lại chuyển lowercase
+        key = key.length === 1 ? key : key.toLowerCase();
+    }
     
     if (useDataChannel) {
         rtcClient.sendControlMessage({
@@ -273,7 +345,17 @@ function handleKeyUp(event) {
     // Cho phép điều khiển nếu đang chia sẻ HOẶC đang nhận video
     if (!isScreenSharing && !window.isReceivingVideo) return;
     
-    const key = event.key.length === 1 ? event.key : event.key.toLowerCase();
+    // Xử lý key: nếu event.key là "unidentified" hoặc rỗng, dùng event.code
+    let key = event.key;
+    if (!key || key === 'Unidentified' || key === 'unidentified') {
+        // Dùng event.code thay thế (ví dụ: "Backspace", "Enter", "KeyA", "Digit1")
+        key = event.code || '';
+        // Loại bỏ prefix "Key", "Digit", "Numpad" nếu có
+        key = key.replace(/^(Key|Digit|Numpad)/i, '');
+    } else {
+        // Bình thường: ký tự đơn giữ nguyên, còn lại chuyển lowercase
+        key = key.length === 1 ? key : key.toLowerCase();
+    }
     
     if (useDataChannel) {
         rtcClient.sendControlMessage({
