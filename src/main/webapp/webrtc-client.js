@@ -2,19 +2,23 @@
  * WebRTC Client để nhận video stream từ server
  */
 class WebRTCClient {
+
     constructor() {
         this.peerConnection = null;
         this.localStream = null;
         this.remoteVideo = document.getElementById('remoteVideo');
         this.pendingCandidates = [];
         this.addedRemoteCandidatesCount = 0;
-        
+        this.controlChannel = null;    // DataChannel cho chuột/phím
+        this.isHost = false;          // Máy đang share màn hình
+
+        // Dùng LAN / Radmin VPN → KHÔNG dùng STUN/TURN
         this.configuration = {
-            iceServers: [],
+            iceServers: [],           // bỏ hết STUN, chỉ dùng host candidate (26.x.x.x)
             iceCandidatePoolSize: 0
         };
     }
-    
+
     async startScreenShare() {
         try {
             this.stopScreenShare();
@@ -31,6 +35,43 @@ class WebRTCClient {
             
             updateStatus("Đã bắt đầu chia sẻ màn hình");
             this.createPeerConnection();
+            
+            // Đánh dấu máy này là HOST
+            this.isHost = true;
+            
+            // Tạo DataChannel cho control
+            this.controlChannel = this.peerConnection.createDataChannel("control");
+            
+            this.controlChannel.onopen = () => {
+                console.log("✅ DataChannel 'control' (host) OPEN");
+            };
+            
+            this.controlChannel.onclose = () => {
+                console.log("⚠️ DataChannel 'control' CLOSED (host)");
+            };
+            
+            this.controlChannel.onmessage = (ev) => {
+                console.log("📥 [HOST] Nhận message control:", ev.data);
+                
+                let msg;
+                try {
+                    msg = JSON.parse(ev.data);
+                } catch (e) {
+                    console.error("Không parse được JSON control:", e);
+                    return;
+                }
+                
+                // Gửi xuống Java Robot qua HTTP local
+                fetch('/api/control', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(msg)
+                }).catch(err => {
+                    console.error("Lỗi gọi /api/control:", err);
+                });
+            };
             
             this.localStream.getTracks().forEach(track => {
                 this.peerConnection.addTrack(track, this.localStream);
@@ -71,6 +112,7 @@ class WebRTCClient {
             this.localStream = null;
         }
         
+        this.isHost = false;
         this.cleanupPeerConnection();
         
         if (this.remoteVideo) {
@@ -128,6 +170,25 @@ class WebRTCClient {
         this.addedRemoteCandidatesCount = 0;
         
         this.peerConnection = new RTCPeerConnection(this.configuration);
+        
+        this.peerConnection.ondatachannel = (event) => {
+            console.log("📡 Nhận DataChannel:", event.channel.label);
+            if (event.channel.label === "control") {
+                this.controlChannel = event.channel;
+                
+                this.controlChannel.onopen = () => {
+                    console.log("✅ DataChannel 'control' (viewer) OPEN");
+                };
+                
+                this.controlChannel.onclose = () => {
+                    console.log("⚠️ DataChannel 'control' CLOSED (viewer)");
+                };
+                
+                this.controlChannel.onmessage = (ev) => {
+                    console.log("📥 [VIEWER] Nhận message control:", ev.data);
+                };
+            }
+        };
         
         this.peerConnection.ontrack = (event) => {
             const stream = event.streams && event.streams.length > 0 
@@ -291,9 +352,35 @@ class WebRTCClient {
             }
         };
         
+        // Log ICE candidates để kiểm tra P2P có hoạt động hay không
+        this.peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                const candidateStr = event.candidate.candidate;
+                console.log("ICE candidate:", candidateStr);
+                
+                // Phân tích loại candidate
+                if (candidateStr.includes("typ srflx")) {
+                    console.log("✅ NAT hợp tác (server reflexive) - P2P direct có khả năng thành công");
+                } else if (candidateStr.includes("typ relay")) {
+                    console.log("⚠️ Đang dùng TURN (relay) - không phải P2P thuần");
+                } else if (candidateStr.includes("typ host")) {
+                    console.log("ℹ️ Chỉ có host candidate (local)");
+                }
+                
+                const candidateMessage = {
+                    type: "ice-candidate",
+                    candidate: event.candidate
+                };
+                wsClient.sendWebRTCSignal(JSON.stringify(candidateMessage));
+            } else {
+                console.log("ICE gathering finished");
+            }
+        };
+        
+        // Log trạng thái ICE (rất quan trọng)
         this.peerConnection.oniceconnectionstatechange = () => {
             const iceState = this.peerConnection.iceConnectionState;
-            console.log('🔌 ICE connection state =', iceState);
+            console.log("ICE state:", iceState);
             
             if (iceState === "checking") {
                 updateStatus("🔄 WebRTC: Đang kiểm tra kết nối...");
@@ -325,16 +412,6 @@ class WebRTCClient {
                         }
                     }, 300);
                 }
-            }
-        };
-        
-        this.peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                const candidateMessage = {
-                    type: "ice-candidate",
-                    candidate: event.candidate
-                };
-                wsClient.sendWebRTCSignal(JSON.stringify(candidateMessage));
             }
         };
     }
@@ -478,6 +555,24 @@ class WebRTCClient {
         } catch (error) {
             console.error("Lỗi xử lý signal:", error);
             updateStatus("Lỗi WebRTC: " + error.message);
+        }
+    }
+    
+    /**
+     * Gửi message control (chuột/phím) qua DataChannel
+     */
+    sendControlMessage(payload) {
+        if (this.controlChannel && this.controlChannel.readyState === "open") {
+            try {
+                const data = JSON.stringify(payload);
+                this.controlChannel.send(data);
+                // Debug:
+                // console.log("📤 Gửi control qua DataChannel:", data);
+            } catch (e) {
+                console.error("❌ Lỗi gửi control qua DataChannel:", e);
+            }
+        } else {
+            console.warn("⚠️ Control DataChannel chưa sẵn sàng");
         }
     }
 }

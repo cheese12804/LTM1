@@ -4,6 +4,9 @@
 
 let isScreenSharing = false;
 
+// Dùng DataChannel cho điều khiển (true để test local)
+let useDataChannel = true;
+
 /**
  * Cập nhật trạng thái hiển thị
  */
@@ -162,7 +165,15 @@ function handleMouseMove(event) {
     
     // Chỉ gửi nếu tọa độ hợp lệ
     if (x >= 0 && y >= 0 && x <= video.videoWidth && y <= video.videoHeight) {
-        wsClient.sendMouseMove(x, y);
+        if (useDataChannel) {
+            rtcClient.sendControlMessage({
+                type: "mouseMove",
+                x: x,
+                y: y
+            });
+        } else {
+            wsClient.sendMouseMove(x, y);
+        }
     }
 }
 
@@ -175,7 +186,16 @@ function handleMouseDown(event) {
     
     const button = event.button === 0 ? 'left' : 
                    event.button === 2 ? 'right' : 'middle';
-    wsClient.sendMouseClick(button, true);
+    
+    if (useDataChannel) {
+        rtcClient.sendControlMessage({
+            type: "mouseClick",
+            button: button,
+            pressed: true
+        });
+    } else {
+        wsClient.sendMouseClick(button, true);
+    }
 }
 
 /**
@@ -187,7 +207,16 @@ function handleMouseUp(event) {
     
     const button = event.button === 0 ? 'left' : 
                    event.button === 2 ? 'right' : 'middle';
-    wsClient.sendMouseClick(button, false);
+    
+    if (useDataChannel) {
+        rtcClient.sendControlMessage({
+            type: "mouseClick",
+            button: button,
+            pressed: false
+        });
+    } else {
+        wsClient.sendMouseClick(button, false);
+    }
 }
 
 /**
@@ -199,7 +228,15 @@ function handleMouseWheel(event) {
     
     event.preventDefault();
     const delta = event.deltaY > 0 ? 1 : -1;
-    wsClient.sendMouseScroll(delta);
+    
+    if (useDataChannel) {
+        rtcClient.sendControlMessage({
+            type: "mouseScroll",
+            delta: delta
+        });
+    } else {
+        wsClient.sendMouseScroll(delta);
+    }
 }
 
 /**
@@ -217,7 +254,16 @@ function handleKeyDown(event) {
     }
     
     const key = event.key.length === 1 ? event.key : event.key.toLowerCase();
-    wsClient.sendKeyPress(key, true);
+    
+    if (useDataChannel) {
+        rtcClient.sendControlMessage({
+            type: "keyPress",
+            key: key,
+            pressed: true
+        });
+    } else {
+        wsClient.sendKeyPress(key, true);
+    }
 }
 
 /**
@@ -228,7 +274,16 @@ function handleKeyUp(event) {
     if (!isScreenSharing && !window.isReceivingVideo) return;
     
     const key = event.key.length === 1 ? event.key : event.key.toLowerCase();
-    wsClient.sendKeyPress(key, false);
+    
+    if (useDataChannel) {
+        rtcClient.sendControlMessage({
+            type: "keyPress",
+            key: key,
+            pressed: false
+        });
+    } else {
+        wsClient.sendKeyPress(key, false);
+    }
 }
 
 /**

@@ -8,9 +8,14 @@ class WebSocketClient {
         this.clientId = null;
         this.peerId = null;
         this.availableClients = {};
-        // Tự động lấy port từ URL hiện tại
-        const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
-        this.serverUrl = `ws://${window.location.hostname}:${port}/ws`;
+        // Tự động chọn ws:// hoặc wss:// dựa trên protocol của trang web
+        // Nếu trang là https:// thì dùng wss://, nếu http:// thì dùng ws://
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        // Dùng location.host để đảm bảo đúng với Nginx reverse proxy
+        // location.host bao gồm cả hostname và port (nếu có)
+        const wsHost = window.location.host; // ví dụ: 160.250.246.202 hoặc 160.250.246.202:8082
+        this.serverUrl = `${wsProtocol}//${wsHost}/ws`;
+        console.log("WebSocket URL:", this.serverUrl);
     }
     
     /**

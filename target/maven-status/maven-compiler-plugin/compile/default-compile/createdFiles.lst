@@ -1,4 +1,5 @@
 com\ltm\remotedesktop\RemoteDesktopWebSocket.class
+com\ltm\remotedesktop\ControlServlet.class
 com\ltm\remotedesktop\StaticFileServlet.class
 com\ltm\remotedesktop\ServerMain.class
 com\ltm\remotedesktop\RemoteDesktopWebSocketCreator.class

@@ -45,6 +45,9 @@ public class ServerMain {
             // Thêm Servlet để phục vụ file tĩnh
             context.addServlet(new ServletHolder(new StaticFileServlet()), "/*");
             
+            // Thêm ControlServlet để xử lý control commands
+            context.addServlet(ControlServlet.class, "/api/control");
+            
             server.setHandler(context);
             
             // Khởi động server
