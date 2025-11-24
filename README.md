@@ -1,6 +1,16 @@
 # REMOTE DESKTOP WEBRTC – FINAL PROJECT (LTM1)
 
-Ứng dụng cho phép chia sẻ màn hình và điều khiển chuột/phím theo thời gian thực dựa trên WebRTC (media + DataChannel) và WebSocket signaling. Server Java (Jetty) phục vụ static web, quản lý signaling. Agent Java chạy riêng trên máy Host để thực thi lệnh chuột/phím thông qua Java Robot API. Hệ thống có thể chạy local, LAN hoặc deploy lên VPS kèm HTTPS.
+Ứng dụng cho phép chia sẻ màn hình và điều khiển chuột/phím theo thời gian thực bằng cách kết hợp:
+
+WebRTC để truyền video màn hình và DataChannel cho tín hiệu điều khiển.
+
+WebSocket để làm signaling server trao đổi Offer/Answer/ICE giữa hai trình duyệt.
+
+Java Jetty Server để phục vụ giao diện web (HTML/JS) và xử lý signaling.
+
+Java Agent chạy riêng trên máy Host để nhận lệnh từ DataChannel và thực thi điều khiển thật bằng Java Robot API.
+
+Kiến trúc hoạt động ở cả local, LAN, hoặc deploy lên VPS với HTTPS để cho phép getDisplayMedia() và WebRTC P2P hoạt động đầy đủ.
 
 ---
 
@@ -8,17 +18,11 @@
 
 | STT | Họ và Tên | MSSV | Email | Trách nhiệm |
 |-----|-----------|------|-------|-------------|
-| 1 | Đỗ Cẩm Chi | B22DCCN105 | [email@example.com] | WebSocket server (Java), signaling, deploy, agent |
+| 1 | Đỗ Cẩm Chi | B22DCCN105 | cheese12804@gmail.com | WebSocket server (Java), signaling, deploy, agent |
 | 2 | Hoàng Sơn Hải | B22DCCN261 | [email@example.com] | Static/HTTP server, WebSocket client (JS), UI glue |
-| 3 | Nguyễn Như Duy | B22DCCN153 | [email@example.com] | WebRTC P2P, DataChannel → agent
+| 3 | Nguyễn Như Duy | B22DCCN153 | [email@example.com] | WebRTC P2P, DataChannel 
 
-**Tên nhóm:** Nhóm 06 – Lập trình mạng  
-**Chủ đề:** Remote Desktop qua WebRTC/WebSocket P2P 
 
-### Phân chia chi tiết
-- **Đỗ Cẩm Chi (Người 1)** – phụ trách `ServerMain`, `RemoteDesktopWebSocket`, `RemoteDesktopWebSocketCreator`; thiết kế quản lý client, auto pair, relay `webrtc-signal`, tài liệu server/QA; phối hợp phần deploy và hướng dẫn agent.
-- **Hoàng Sơn Hải (Người 2)** – phụ trách `StaticFileServlet`, `ControlServlet`, cấu hình Jetty; xây dựng client-side signaling (`websocket-client.js`, `main.js`); cập nhật tài liệu module client và hướng dẫn deploy VPS.
-- **Nguyễn Như Duy (Người 3)** – phụ trách `webrtc-client.js`, `WEBRTC_CLIENT_README.md`, DataChannel → agent; viết hướng dẫn agent (`remote-agent.jar`) và kiểm thử end-to-end (LAN/VPS).
 
 ---
 
