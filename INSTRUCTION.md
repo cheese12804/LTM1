@@ -18,7 +18,7 @@ Sinh viên lựa chọn một chủ đề liên quan tới các nội dung đã 
 assignment-network-project/
 ├── README.md                    # Mô tả dự án (do sinh viên hoàn thiện)
 ├── INSTRUCTION.md               # Hướng dẫn (file này — KHÔNG chỉnh sửa)
-├── statics/                     # Chứa hình ảnh, dataset, diagram
+├── static/                      # Chứa hình ảnh, dataset, diagram
 │   ├── logo.png
 │   ├── dataset_sample.csv
 │   └── diagram.png

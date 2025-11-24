@@ -1,0 +1,41 @@
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# Package files
+*.jar
+*.war
+*.ear
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build directories
+target/
+build/
+out/
+bin/
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# Node modules (if using Node.js)
+node_modules/
+
+# Environment variables
+.env
+.env.local
+
